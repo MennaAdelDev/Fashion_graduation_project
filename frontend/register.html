@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StyleWeave – Sign Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="auth.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="auth-top">
+    <a class="logo" href="index.html" aria-label="StyleWeave home"><svg class="i" viewBox="0 0 24 24"><path d="M12 20.5s-8-4.9-8-11A4.5 4.5 0 0 1 12 6.8 4.5 4.5 0 0 1 20 9.5c0 6.1-8 11-8 11z"/><path d="M9.2 10.2l2.8 2.6 3.2-3.8" opacity=".85"/></svg>StyleWeave</a>
+    <div class="alt"><span>Already have an account?</span><a class="btn ghost" href="login.html">Log In</a></div>
+  </header>
+
+  <main class="auth">
+    <section class="auth-card" aria-labelledby="t">
+      <div class="eyebrow">Join us<i>•</i>Your vision</div>
+      <h1 class="auth-title" id="t">Create your <em>account</em></h1>
+      <p class="auth-sub">Describe your idea, meet designers and choose a manufacturer, all in one place.</p>
+
+      <form id="authForm" data-mode="register" novalidate>
+        <fieldset class="types">
+          <legend class="legend">I want to join as</legend>
+          <label class="type"><input type="radio" name="role" value="customer" checked><span>Customer<small>Design my piece</small></span></label>
+          <label class="type"><input type="radio" name="role" value="designer"><span>Designer<small>Offer my skills</small></span></label>
+          <label class="type"><input type="radio" name="role" value="manufacturer"><span>Factory<small>Produce pieces</small></span></label>
+        </fieldset>
+        <div class="field">
+          <label for="name">Full name</label>
+          <div class="input"><input id="name" name="name" type="text" autocomplete="name" placeholder="Your full name"></div>
+          <span class="err" role="alert"></span>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <div class="input"><input id="email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"></div>
+          <span class="err" role="alert"></span>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input has-toggle"><input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+              <button class="pw-toggle" type="button" data-target="password" aria-label="Show password"></button></div>
+            <span class="err" role="alert"></span>
+          </div>
+          <div class="field">
+            <label for="confirm">Confirm password</label>
+            <div class="input has-toggle"><input id="confirm" name="confirm" type="password" autocomplete="new-password" placeholder="Repeat password">
+              <button class="pw-toggle" type="button" data-target="confirm" aria-label="Show password"></button></div>
+            <span class="err" role="alert"></span>
+          </div>
+        </div>
+        <div class="strength"><div class="bar"><i id="strengthBar"></i></div><small id="strengthText">Use 8 or more characters with letters and numbers.</small></div>
+        <div class="field check-wrap">
+          <label class="check"><input type="checkbox" id="terms" name="terms"> <span>I agree to the <a class="link" href="#terms">Terms &amp; Conditions</a> and <a class="link" href="#privacy">Privacy Policy</a>.</span></label>
+          <span class="err" role="alert"></span>
+        </div>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <button class="btn solid submit" type="submit">Create Account <svg class="i" viewBox="0 0 24 24"><path d="M4 12h15M14 6l6 6-6 6"/></svg></button>
+      </form>
+      <p class="switch">Already have an account? <a class="link" href="login.html">Log In</a></p>
+    </section>
+
+    <aside class="auth-art" aria-hidden="true">
+      <img src="img/hero.jpg" alt="">
+    </aside>
+  </main>
+</div>
+<script src="auth.js"></script>
+</body>
+</html>

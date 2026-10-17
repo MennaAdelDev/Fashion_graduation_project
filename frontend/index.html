@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StyleWeave</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M12 20.5s-8-4.9-8-11A4.5 4.5 0 0 1 12 6.8 4.5 4.5 0 0 1 20 9.5c0 6.1-8 11-8 11z"/><path d="M9.2 10.2l2.8 2.6 3.2-3.8" opacity=".85"/></symbol>
+  <symbol id="pencil" viewBox="0 0 24 24"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L8 19l-4 1z"/><path d="M14.5 6.5l3 3"/></symbol>
+  <symbol id="image" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9.5" r="1.5"/><path d="M5 17l4.5-4.5 3 3 3-3.5L20 16"/></symbol>
+  <symbol id="fabric" viewBox="0 0 24 24"><path d="M6 4h8l4 4v12H6z"/><path d="M14 4v4h4"/><path d="M9 12c2 1 4-1 6 0M9 16c2 1 4-1 6 0"/></symbol>
+  <symbol id="box" viewBox="0 0 24 24"><path d="M12 3l8 4v10l-8 4-8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/><path d="M8 5l8 4" opacity=".6"/></symbol>
+  <symbol id="recycle" viewBox="0 0 24 24"><path d="M8 5l2-3 3 5M7 8l-3 6h5M9 14l-2 3 6 3h2M16 20l4-6-3-1M17 9l-3-6-4 1M15 7l2 3 4-1"/></symbol>
+  <symbol id="scissors" viewBox="0 0 24 24"><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="6.5" cy="17.5" r="2.5"/><path d="M8.7 7.8L20 17M8.7 16.2L20 7"/></symbol>
+  <symbol id="factory" viewBox="0 0 24 24"><path d="M3 20V10l6 3V10l6 3V6h3v14z"/><path d="M7 20v-3h3v3M13 20v-3h3v3"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h15M14 6l6 6-6 6"/></symbol>
+  <symbol id="menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c.8-4 3.7-6 7.5-6s6.7 2 7.5 6"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="insta" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5"/><circle cx="12" cy="12" r="3.6"/><circle cx="16.8" cy="7.2" r=".6" fill="currentColor"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M5 4l14 16M19 4L5 20"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M11 8.5c3.2-.7 4.8 1.6 4 3.6-.7 1.8-3.2 1.7-3.4.1M12 10.5L10.5 18"/></symbol>
+  <symbol id="yt" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3.5"/><path d="M10.3 9.5v5l4.2-2.5z" fill="currentColor"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <a class="logo" href="#home" aria-label="StyleWeave home"><svg class="i"><use href="#heart"/></svg>StyleWeave</a>
+    <nav class="main" aria-label="Main">
+      <a class="on" href="#home">Home</a>
+      <a href="#how">How It Works</a>
+      <a href="#designers">Designers</a>
+      <a href="#factories">Factories</a>
+      <a href="#sustainability">Sustainability</a>
+    </nav>
+    <div class="actions">
+      <button class="search" aria-label="Search"><svg class="i"><use href="#search"/></svg></button>
+      <a class="login" href="login.html">Log In</a>
+      <a class="btn solid sm" href="register.html">Sign Up</a>
+    </div>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false"><svg class="i"><use href="#menu"/></svg></button>
+  </header>
+  <nav class="drawer" id="drawer" aria-label="Mobile">
+    <a href="#how">How It Works</a><a href="#designers">Designers</a><a href="#factories">Factories</a><a href="#sustainability">Sustainability</a><a href="login.html">Log In</a><a href="register.html">Sign Up</a>
+  </nav>
+
+  <main id="home">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">Your Vision<i>•</i>Our Craft</div>
+        <h1>Custom Fashion <em>Made for You</em></h1>
+        <p>Turn your ideas into real clothes. Describe your dream piece, get an AI preview, work with talented designers, and choose the best manufacturer — all in one place.</p>
+        <div class="btns">
+          <a class="btn solid" href="#start">Start Your Design <svg class="i"><use href="#arrow"/></svg></a>
+          <a class="btn ghost" href="#designers">Explore Designers</a>
+        </div>
+      </div>
+      <div class="hero-img"><img src="img/hero.jpg" alt="Woman in a flowing pink silk garment beside a soft arch, with the handwritten words: Your idea, Our design, Real clothes"></div>
+    </section>
+
+    <section class="steps" id="how" aria-label="How it works">
+      <div class="step"><span class="ic"><svg class="i"><use href="#pencil"/></svg></span><b>1. Describe Your Idea</b><span>Share your vision &amp; preferences</span></div>
+      <div class="step"><span class="ic"><svg class="i"><use href="#image"/></svg></span><b>2. AI Generates a Preview</b><span>See a visual concept instantly</span></div>
+      <div class="step"><span class="ic"><svg class="i"><use href="#pencil"/></svg></span><b>3. Work with a Designer</b><span>Refine your design together</span></div>
+      <div class="step"><span class="ic"><svg class="i"><use href="#fabric"/></svg></span><b>4. Choose a Manufacturer</b><span>Compare quality, materials &amp; price</span></div>
+      <div class="step"><span class="ic"><svg class="i"><use href="#box"/></svg></span><b>5. Get Your Piece</b><span>Track production &amp; delivery</span></div>
+    </section>
+
+    <div class="sec-head">
+      <div><h2>Explore by Category</h2><p>Find the perfect style, or create something entirely new.</p></div>
+      <a class="viewall" href="#all">View All <svg class="i"><use href="#arrow"/></svg></a>
+    </div>
+    <section class="cats">
+      <a class="cat" href="#start"><div class="ph"><img src="img/cat-custom.jpg" alt="Woman wearing a pink dress"></div>
+        <div class="meta"><span class="ic"><svg class="i"><use href="#heart"/></svg></span><div><b>Custom Design</b><small>From your idea to a real piece</small></div><svg class="i arrow"><use href="#arrow"/></svg></div></a>
+      <a class="cat" href="#recycle"><div class="ph"><img src="img/cat-recycle.jpg" alt="Recycling symbol next to a rack of neutral clothes"></div>
+        <div class="meta"><span class="ic"><svg class="i"><use href="#recycle"/></svg></span><div><b>Recycle</b><small>Give your clothes a second life</small></div><svg class="i arrow"><use href="#arrow"/></svg></div></a>
+      <a class="cat" href="#designers" id="designers"><div class="ph"><img src="img/cat-designers.jpg" alt="Designers sketching at a studio table"></div>
+        <div class="meta"><span class="ic"><svg class="i"><use href="#scissors"/></svg></span><div><b>Featured Designers</b><small>Meet creative minds</small></div><svg class="i arrow"><use href="#arrow"/></svg></div></a>
+      <a class="cat" href="#factories" id="factories"><div class="ph"><img src="img/cat-factories.jpg" alt="Rolls of printed fabric"></div>
+        <div class="meta"><span class="ic"><svg class="i"><use href="#factory"/></svg></span><div><b>Partner Factories</b><small>Quality meets craftsmanship</small></div><svg class="i arrow"><use href="#arrow"/></svg></div></a>
+    </section>
+
+    <section class="band" id="sustainability">
+      <div class="band-copy">
+        <h3>Sustainable Fashion<br>for a Better Tomorrow</h3>
+        <p>We believe in a more conscious fashion industry. Choose to design, recycle, and make a difference.</p>
+        <a class="btn solid sm" href="#learn">Learn More <svg class="i"><use href="#arrow"/></svg></a>
+      </div>
+      <div class="band-img"><img src="img/banner-hangers.jpg" alt="Pink and neutral garments on hangers beside an olive branch"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div><a class="logo" href="#home"><svg class="i"><use href="#heart"/></svg>StyleWeave</a><p class="tag">Your vision. Our craft.</p></div>
+    <div><h4>Quick Links</h4><ul><li><a href="#home">Home</a></li><li><a href="#how">How It Works</a></li><li><a href="#designers">Designers</a></li><li><a href="#factories">Factories</a></li><li><a href="#sustainability">Sustainability</a></li></ul></div>
+    <div><h4>Support</h4><ul><li><a href="#help">Help Center</a></li><li><a href="#contact">Contact Us</a></li><li><a href="#terms">Terms &amp; Conditions</a></li><li><a href="#privacy">Privacy Policy</a></li></ul></div>
+    <div><h4>Follow Us</h4><div class="social"><a href="#instagram" aria-label="Instagram"><svg class="i"><use href="#insta"/></svg></a><a href="#x" aria-label="X"><svg class="i"><use href="#x"/></svg></a><a href="#pinterest" aria-label="Pinterest"><svg class="i"><use href="#pin"/></svg></a><a href="#youtube" aria-label="YouTube"><svg class="i"><use href="#yt"/></svg></a></div></div>
+    <div class="copy">© 2025 StyleWeave. All rights reserved.</div>
+  </footer>
+</div>
+
+<nav class="tabbar" aria-label="App">
+  <a class="on" href="#home"><svg class="i"><use href="#home"/></svg>Home</a>
+  <a href="#designers"><svg class="i"><use href="#user"/></svg>Designers</a>
+  <a class="fab" href="#start" aria-label="Start your design"><svg class="i"><use href="#plus"/></svg></a>
+  <a href="#recycle"><svg class="i"><use href="#recycle"/></svg>Recycle</a>
+  <a href="#profile"><svg class="i"><use href="#user"/></svg>Profile</a>
+</nav>
+<script src="script.js"></script>
+</body>
+</html>
