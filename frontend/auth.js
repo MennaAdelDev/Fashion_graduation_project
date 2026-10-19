@@ -94,6 +94,8 @@
 
     var data = {};
     new FormData(form).forEach(function (v, k) { if (k !== 'confirm') data[k] = v; });
+    if (data.role === 'designer' || data.role === 'manufacturer') { data.provider_type = data.role; data.role = 'provider'; }
+    if ('terms' in data) data.terms = true;
 
     if (!API_BASE) {
       showStatus('ok', mode === 'login'
@@ -106,8 +108,8 @@
     fetch(API_BASE + '/' + mode, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (b) { return { ok: r.ok, body: b }; }); })
       .then(function (res) {
-        if (!res.ok) { showStatus('bad', res.body.message || 'Something went wrong. Please try again.'); return; }
-        if (res.body.token) { try { localStorage.setItem('token', res.body.token); } catch (err) {} }
+        if (!res.ok) { showStatus('bad', (res.body.error && res.body.error.message) || 'Something went wrong. Please try again.'); return; }
+        if (res.body.data && res.body.data.token) { try { localStorage.setItem('token', res.body.data.token); } catch (err) {} }
         showStatus('ok', mode === 'login' ? 'Welcome back! Redirecting…' : 'Account created! Redirecting…');
         setTimeout(function () { window.location.href = mode === 'login' ? 'index.html' : 'login.html'; }, 900);
       })
