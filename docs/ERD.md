@@ -1,6 +1,6 @@
 # Database ERD (Sprint 1)
 
-Source of truth: `backend/db/migrations/001_initial_schema.sql`.
+Source of truth: `backend/db/migrations/001` to `004`. The deferred order workflow (`backend/db/deferred/005_order_workflow.sql`) is not drawn here.
 
 ```mermaid
 erDiagram
@@ -16,8 +16,12 @@ erDiagram
   providers ||--o{ availability : has
   providers ||--o{ portfolio : shows
   categories ||--o{ portfolio : tags
-  categories ||--o{ projects : classifies
-  projects ||--o| project_requirements : has
+  projects ||--|{ project_items : contains
+  categories ||--o{ project_items : classifies
+  materials ||--o{ project_items : "made of"
+  materials ||--o{ provider_materials : "used by"
+  providers ||--o{ provider_materials : works_with
+  users ||--o{ notifications : receives
   projects ||--o{ project_requests : sent
   providers ||--o{ project_requests : receives
   projects ||--o{ project_designs : has
@@ -93,23 +97,42 @@ erDiagram
   projects {
     uuid id PK
     uuid customer_id FK
-    uuid category_id FK
     text title
-    int quantity
     numeric budget_min
     numeric budget_max
     date deadline
     text status
   }
-  project_requirements {
-    uuid project_id PK
-    text item
-    text fabric
+  project_items {
+    uuid id PK
+    uuid project_id FK
+    uuid category_id FK
+    int quantity
+    text item_name
+    uuid material_id FK
+    boolean material_confirmed
+    text material_notes
     text color
     text style
-    text size
+    text size_details
     text customization
     jsonb extra
+  }
+  materials {
+    uuid id PK
+    text name UK
+    text slug UK
+  }
+  provider_materials {
+    uuid provider_id PK
+    uuid material_id PK
+  }
+  notifications {
+    uuid id PK
+    uuid user_id FK
+    text type
+    jsonb payload
+    timestamptz read_at
   }
   project_requests {
     uuid id PK
@@ -153,5 +176,8 @@ Key constraints:
 - `provider_pricing (provider_id, category_id)` references `provider_categories`, so a provider can only price a category it supports.
 - `max_quantity >= min_quantity` and `max_price >= min_price`.
 - One review per customer per provider.
-- A project outside `draft` must have `category_id` and `quantity`.
+- A project outside `draft` must have at least one row in `project_items` (trigger).
+- `project_items.material_confirmed = true` requires a `material_id`.
+- Only one `accepted` request per project (partial unique index).
+- `conversations (project_id, customer_id)` is a composite foreign key to `projects`, so the conversation customer always owns the project. A trigger checks that a message sender is the conversation customer or the provider's user.
 - Row Level Security is enabled on every table with no policies: only the Express backend (service role) can read or write data.

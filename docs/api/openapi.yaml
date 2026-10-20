@@ -1,0 +1,4048 @@
+openapi: 3.0.3
+info:
+  title: Fashion AI Marketplace API
+  version: 1.1.0-draft
+  description: 'Sprint 1 API contract (draft for team approval). All paths are relative to the server URL. Success responses use { data } (lists add { meta }). Errors use { error: { code, message, details } }. JSON fields are snake_case and match the database. x-roles lists the roles allowed on an operation and x-implementation-sprint says when the real implementation is planned. Operations tagged "Order workflow (deferred)" are designed now but built only if the Month-3 MVP is stable.'
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - name: System
+  - name: Auth
+  - name: Categories
+  - name: Materials
+  - name: Providers
+  - name: Provider profile
+  - name: Reviews
+  - name: Projects
+  - name: Designs
+  - name: Matching
+  - name: Requests
+  - name: Messaging
+  - name: Notifications
+  - name: AI (draft)
+  - name: Order workflow (deferred)
+paths:
+  /health:
+    get:
+      tags:
+        - System
+      summary: Liveness check
+      x-implementation-sprint: 1
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                      time:
+                        type: string
+                        format: date-time
+                required:
+                  - data
+  /health/db:
+    get:
+      tags:
+        - System
+      summary: Database connectivity check
+      description: Reads the categories count through the service role. Used to verify the Supabase configuration.
+      x-implementation-sprint: 1
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                      categories_count:
+                        type: integer
+                required:
+                  - data
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Create a customer or provider account
+      description: role must be customer or provider (admin is never accepted). provider_type is required for providers. Providers get a placeholder providers row (business_name = name) to complete during onboarding.
+      x-implementation-sprint: 2
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResult"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Log in with email and password
+      x-implementation-sprint: 2
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AuthResult"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Current user
+      x-implementation-sprint: 2
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/User"
+                required:
+                  - data
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: List active categories
+      x-implementation-sprint: 2
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Category"
+                required:
+                  - data
+  /materials:
+    get:
+      tags:
+        - Materials
+      summary: List the material (fabric) catalog
+      description: Controlled vocabulary shared by the AI, the matching engine and provider profiles, so that fabric names are never free text.
+      x-implementation-sprint: 2
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Material"
+                required:
+                  - data
+  /providers:
+    get:
+      tags:
+        - Providers
+      summary: Search and filter providers
+      description: Public marketplace browsing without AI. quantity and max_price are evaluated per category, so category_id is required when either is used. quantity keeps providers where min_quantity <= quantity <= max_quantity for that category. max_price keeps providers whose min_price <= max_price for that category. material_id keeps providers that work with that material. min_rating uses the computed rating average. Default sort is -rating.
+      x-implementation-sprint: 2
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Text search in business name and description.
+          schema:
+            type: string
+        - name: category_id
+          in: query
+          required: false
+          description: Only providers that support this category.
+          schema:
+            type: string
+            format: uuid
+        - name: material_id
+          in: query
+          required: false
+          description: Only providers that work with this material.
+          schema:
+            type: string
+            format: uuid
+        - name: provider_type
+          in: query
+          required: false
+          description: Provider type.
+          schema:
+            $ref: "#/components/schemas/ProviderType"
+        - name: city
+          in: query
+          required: false
+          description: City.
+          schema:
+            type: string
+        - name: quantity
+          in: query
+          required: false
+          description: Requires category_id.
+          schema:
+            type: integer
+            minimum: 1
+        - name: max_price
+          in: query
+          required: false
+          description: Requires category_id.
+          schema:
+            type: number
+            minimum: 0
+        - name: min_rating
+          in: query
+          required: false
+          description: Minimum rating average.
+          schema:
+            type: number
+            minimum: 1
+            maximum: 5
+        - name: sort
+          in: query
+          required: false
+          description: Sort field; a leading minus means descending.
+          schema:
+            type: string
+            enum:
+              - rating
+              - -rating
+              - price
+              - -price
+              - name
+              - -name
+            default: -rating
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderSummary"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /providers/compare:
+    get:
+      tags:
+        - Providers
+      summary: Compare providers side by side
+      description: Returns full profiles for 2 or 3 providers. When project_id is given, each item includes the stored match score and reason for that project when one exists.
+      x-roles:
+        - customer
+      x-implementation-sprint: 4
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Comma-separated provider ids (2 or 3).
+          schema:
+            type: string
+        - name: project_id
+          in: query
+          required: false
+          description: Optional project for match scores.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderComparisonItem"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /providers/me:
+    get:
+      tags:
+        - Provider profile
+      summary: Own provider profile
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderProfile"
+                required:
+                  - data
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      tags:
+        - Provider profile
+      summary: Update own provider profile
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderProfile"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /providers/me/pricing/{category_id}:
+    put:
+      tags:
+        - Provider profile
+      summary: Create or replace pricing, MOQ and capacity for a category
+      description: Also adds the category to the provider specialties.
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PricingUpsert"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderPricing"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - Provider profile
+      summary: Remove a category and its pricing
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Success
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /providers/me/materials:
+    put:
+      tags:
+        - Provider profile
+      summary: Replace the materials the provider works with
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderMaterialsReplace"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Material"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /providers/me/working-hours:
+    put:
+      tags:
+        - Provider profile
+      summary: Replace working hours
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkingHoursReplace"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WorkingHour"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /providers/me/availability:
+    put:
+      tags:
+        - Provider profile
+      summary: Upsert availability dates
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvailabilityReplace"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AvailabilityEntry"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /providers/me/portfolio:
+    post:
+      tags:
+        - Provider profile
+      summary: Upload a portfolio image
+      description: "Stored in the portfolio bucket. Allowed types: jpeg, png, webp. Max 5 MB."
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                category_id:
+                  type: string
+                  format: uuid
+                description:
+                  type: string
+              required:
+                - image
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PortfolioItem"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /providers/me/portfolio/{portfolio_id}:
+    delete:
+      tags:
+        - Provider profile
+      summary: Delete a portfolio item
+      x-roles:
+        - provider
+      x-implementation-sprint: 2
+      parameters:
+        - name: portfolio_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Success
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /providers/{id}:
+    get:
+      tags:
+        - Providers
+      summary: Provider profile
+      description: Profile with pricing, materials, working hours and portfolio.
+      x-implementation-sprint: 2
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProviderProfile"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /providers/{id}/availability:
+    get:
+      tags:
+        - Providers
+      summary: Provider availability
+      x-implementation-sprint: 2
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          description: Start date (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: End date (YYYY-MM-DD).
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AvailabilityEntry"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /providers/{id}/reviews:
+    get:
+      tags:
+        - Reviews
+      summary: Provider reviews
+      description: Hidden reviews are excluded.
+      x-implementation-sprint: 3
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Review"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Reviews
+      summary: Review a provider
+      description: One review per customer per provider (409 if it already exists). Allowed only for a customer who has an accepted request with this provider (backend rule).
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Review"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects:
+    get:
+      tags:
+        - Projects
+      summary: List projects
+      description: Customers see their own projects. Providers see projects they received a request for. Admins see all.
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 3
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by status.
+          schema:
+            $ref: "#/components/schemas/ProjectStatus"
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags:
+        - Projects
+      summary: Create a project as draft
+      description: Only title is required while the project is a draft. A project can contain several items (for example a dress, trousers and shoes); each item has its own category, quantity and requirements. A single-product request is simply a project with one item.
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Project"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /projects/{id}:
+    get:
+      tags:
+        - Projects
+      summary: Project details
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Project"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - Projects
+      summary: Update project fields
+      description: Allowed for the owner while the status is draft or open. Items are changed through PUT /projects/{id}/items.
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Project"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /projects/{id}/items:
+    put:
+      tags:
+        - Projects
+      summary: Replace the items of a project
+      description: Replaces the whole list. Allowed while the project is draft, or open with no active requests. The AI extraction result is saved with this endpoint after the customer confirms it.
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectItemsReplace"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProjectItem"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{id}/status:
+    patch:
+      tags:
+        - Projects
+      summary: Change project status
+      description: "Allowed transitions: draft to open (owner; needs at least one item, enforced by a database trigger), open to in_progress (when a request is accepted), in_progress to completed (owner or the accepted provider), draft/open/in_progress to cancelled (owner). draft cannot be set."
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectStatusUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Project"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{id}/designs:
+    get:
+      tags:
+        - Designs
+      summary: Reference images and concepts attached to a project
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Design"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Designs
+      summary: Upload a reference image
+      description: Creates a design with source upload. Generated concepts are created through POST /ai/generate-design.
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+              required:
+                - image
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Design"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /projects/{id}/matches:
+    post:
+      tags:
+        - Matching
+      summary: Run matching for a project
+      description: "Backend applies hard constraints first, then ranks compatible providers with the weighted score. A provider must support the category of EVERY item (mixed requests such as shoes plus dresses usually return no_match; the UI should suggest splitting them into separate projects). Per item: quantity against min_quantity and max_quantity of that category; material only when material_confirmed is true; deadline against lead_time_days and availability. Providers that fail a hard constraint are returned in excluded with reason codes. status is no_match when no provider is compatible. Results are stored in matches (upsert per project and provider). Scoring weights and breakdown names are owned by AI 2 and are a draft."
+      x-roles:
+        - customer
+      x-implementation-sprint: 4
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MatchResponse"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      tags:
+        - Matching
+      summary: Latest stored matching result
+      x-roles:
+        - customer
+        - admin
+      x-implementation-sprint: 4
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/MatchResponse"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /projects/{id}/requests:
+    post:
+      tags:
+        - Requests
+      summary: Send the project to a provider
+      description: Project must be open. One request per project and provider (409 if it exists). The provider receives the project, its items and the attached designs.
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectRequestCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProjectRequest"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /project-requests:
+    get:
+      tags:
+        - Requests
+      summary: Request inbox
+      description: Providers see requests addressed to them with the full project brief and designs. Customers see requests they sent.
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 3
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by status.
+          schema:
+            $ref: "#/components/schemas/RequestStatus"
+        - name: project_id
+          in: query
+          required: false
+          description: Filter by project.
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProjectRequestDetail"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /project-requests/{id}:
+    get:
+      tags:
+        - Requests
+      summary: Request details
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 3
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProjectRequestDetail"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - Requests
+      summary: Accept, reject or withdraw a request
+      description: MVP flow. Providers set accepted or rejected on pending requests. Customers set withdrawn on pending requests. Accepting sets responded_at, moves the project to in_progress and marks the other pending requests of the project as expired (first acceptance wins; a database index allows one accepted request per project). Price, material and delivery-time negotiation uses the deferred quotes endpoints.
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 4
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectRequestStatusUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProjectRequest"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /conversations:
+    get:
+      tags:
+        - Messaging
+      summary: List own conversations
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 4
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+                required:
+                  - data
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags:
+        - Messaging
+      summary: Start a conversation about a project
+      description: Returns the existing conversation (200) when one already exists for the project and provider, otherwise creates it (201).
+      x-roles:
+        - customer
+      x-implementation-sprint: 4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Conversation"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /conversations/{id}/messages:
+    get:
+      tags:
+        - Messaging
+      summary: Messages, oldest first
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 4
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Messaging
+      summary: Send a message
+      description: Only the customer and the provider of the conversation can send (also enforced by a database trigger).
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 4
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Message"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /notifications:
+    get:
+      tags:
+        - Notifications
+      summary: Own notifications
+      description: The table exists since Sprint 1; the endpoints and event hooks are planned for Sprint 4 (request received, request accepted or rejected, new message, status changes).
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 4
+      parameters:
+        - name: unread
+          in: query
+          required: false
+          description: Only unread notifications when true.
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /notifications/{id}/read:
+    patch:
+      tags:
+        - Notifications
+      summary: Mark a notification as read
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 4
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Notification"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /ai/extract-requirements:
+    post:
+      tags:
+        - AI (draft)
+      summary: Extract structured requirements from natural language
+      description: "DRAFT: to be finalized with AI 1. The backend calls the AI layer; clients never call it directly and no AI key is exposed. The AI interprets the text only. It never returns provider prices, availability, MOQ, capacity or ratings. Output is an items array (one element for a single product). Material names are mapped to the materials catalog; a material the AI guessed is marked material_source ai_suggestion and is not binding until the customer confirms it."
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiExtractRequest"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AiExtractResponse"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /ai/generate-design:
+    post:
+      tags:
+        - AI (draft)
+      summary: Generate a visual concept and attach it to a project
+      description: "DRAFT: to be finalized with AI 3. Returns a Design with source generated, or demo when the fallback is used. The image is a visual concept, not a production-ready pattern or exact measurements."
+      x-roles:
+        - customer
+      x-implementation-sprint: 3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiGenerateDesignRequest"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Design"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /project-requests/{id}/quotes:
+    get:
+      tags:
+        - Order workflow (deferred)
+      summary: Offer and counter-offer history for a request
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Quote"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Order workflow (deferred)
+      summary: Send an offer or counter-offer
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Negotiation happens through these structured offers, not through chat. The provider sends round 1 (odd rounds), the customer may counter (even rounds), up to a configurable maximum (default 3 rounds). A new offer supersedes the pending one and moves the request to negotiating. Items reference project items; unit price, quantity and material can change, as well as lead time and deposit percent."
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Quote"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /quotes/{id}:
+    patch:
+      tags:
+        - Order workflow (deferred)
+      summary: Accept or reject an offer
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Only the party that did not propose the offer can respond. Accepting sets the request to accepted, the project to in_progress, expires the other requests and creates the order in awaiting_deposit."
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteRespond"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Quote"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /orders:
+    get:
+      tags:
+        - Order workflow (deferred)
+      summary: List own orders
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by status.
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - name: page
+          in: query
+          required: false
+          description: Page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Items per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+                  meta:
+                    $ref: "#/components/schemas/PageMeta"
+                required:
+                  - data
+                  - meta
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /orders/{id}:
+    get:
+      tags:
+        - Order workflow (deferred)
+      summary: Order with financials and stages
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OrderDetail"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - Order workflow (deferred)
+      summary: Set the delivery address
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Customer only. Required before the order can be shipped."
+      x-roles:
+        - customer
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderDeliveryUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders/{id}/status:
+    patch:
+      tags:
+        - Order workflow (deferred)
+      summary: Move the order to the next status
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Transitions are enforced by a database trigger (see OrderStatus). Production cannot start before the deposit is paid (unless deposit_percent is 0). The provider moves the order to pending_customer_approval, shipped and delivered; the customer approves the final result by allowing shipped, confirms with completed, or opens a dispute; cancelled needs a reason."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderStatusUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Order"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /orders/{id}/stages:
+    get:
+      tags:
+        - Order workflow (deferred)
+      summary: Production stages
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductionStage"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders/{id}/stages/{stage_id}:
+    patch:
+      tags:
+        - Order workflow (deferred)
+      summary: Update a production stage
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. The provider sets in_progress or completed and attaches progress photos. The customer sets approved or changes_requested only on stages with requires_customer_approval (the sample stage for bulk orders)."
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: stage_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StageUpdate"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ProductionStage"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /orders/{id}/payments:
+    get:
+      tags:
+        - Order workflow (deferred)
+      summary: Payments and financial summary
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Payment"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Order workflow (deferred)
+      summary: Pay the deposit or the balance (simulation)
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Payment simulation only (is_simulated is true): no real payment gateway, as stated in the roadmap."
+      x-roles:
+        - customer
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Payment"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /orders/{id}/issues:
+    get:
+      tags:
+        - Order workflow (deferred)
+      summary: Issues raised on an order
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql."
+      x-roles:
+        - customer
+        - provider
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrderIssue"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - Order workflow (deferred)
+      summary: Report a problem with an order
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Allowed after delivery inside the issue window (placeholder 7 days, to be approved) or while the order is pending customer approval. The order moves to disputed."
+      x-roles:
+        - customer
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueCreate"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OrderIssue"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /order-issues/{id}:
+    patch:
+      tags:
+        - Order workflow (deferred)
+      summary: Resolve an issue
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Admin decides the outcome: rework_agreed (default for defects, the provider redoes the work), refund_agreed, rejected or closed."
+      x-roles:
+        - admin
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueResolve"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OrderIssue"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders/{id}/media:
+    post:
+      tags:
+        - Order workflow (deferred)
+      summary: Upload a progress photo or issue evidence
+      description: "DEFERRED: implement only if the Month-3 MVP is stable (roadmap Month 4-5). The database design is ready in backend/db/deferred/005_order_workflow.sql. Stored in the order-media bucket. Optional stage_id or issue_id (not both)."
+      x-roles:
+        - customer
+        - provider
+      x-implementation-sprint: 9
+      x-deferred: true
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                stage_id:
+                  type: string
+                  format: uuid
+                issue_id:
+                  type: string
+                  format: uuid
+              required:
+                - image
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OrderMedia"
+                required:
+                  - data
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: "VALIDATION_ERROR: body, query or path parameters are invalid."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: "UNAUTHORIZED: missing or invalid token."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: "FORBIDDEN: role or ownership not allowed."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: "NOT_FOUND: resource does not exist."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: "CONFLICT: duplicate or invalid state transition."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - CONFLICT
+                - INTERNAL_ERROR
+                - NOT_IMPLEMENTED
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - field
+                  - message
+          required:
+            - code
+            - message
+      required:
+        - error
+    PageMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total:
+          type: integer
+      required:
+        - page
+        - page_size
+        - total
+    Role:
+      type: string
+      enum:
+        - customer
+        - provider
+        - admin
+    ProviderType:
+      type: string
+      enum:
+        - designer
+        - manufacturer
+      description: UI label for manufacturer is Factory.
+    ProjectStatus:
+      type: string
+      enum:
+        - draft
+        - open
+        - in_progress
+        - completed
+        - cancelled
+      description: Coarse project lifecycle. A project needs at least one item before leaving draft. Fine-grained production states live on orders (deferred).
+    RequestStatus:
+      type: string
+      enum:
+        - pending
+        - negotiating
+        - accepted
+        - rejected
+        - withdrawn
+        - expired
+      description: "pending: sent to the provider. accepted or rejected: provider decision (MVP). negotiating: a structured counter-offer is in progress (deferred). withdrawn: cancelled by the customer. expired: closed because another provider was accepted or no answer in time. Only one request per project can be accepted."
+    AvailabilityStatus:
+      type: string
+      enum:
+        - available
+        - limited
+        - unavailable
+    DesignSource:
+      type: string
+      enum:
+        - upload
+        - generated
+        - demo
+      description: demo marks a seeded fallback image so it is never presented as a real generation.
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/Role"
+        provider_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+        - id
+        - name
+        - email
+        - role
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        role:
+          type: string
+          enum:
+            - customer
+            - provider
+        provider_type:
+          $ref: "#/components/schemas/ProviderType"
+        terms:
+          type: boolean
+          enum:
+            - true
+      required:
+        - name
+        - email
+        - password
+        - role
+        - terms
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+    AuthResult:
+      type: object
+      properties:
+        token:
+          type: string
+          description: "Supabase access token. Send as Authorization: Bearer <token>."
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Seconds.
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - token
+        - user
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+        - id
+        - name
+        - slug
+    Material:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+        - id
+        - name
+        - slug
+    ProviderMaterialsReplace:
+      type: object
+      properties:
+        material_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+        - material_ids
+    ProviderPricing:
+      type: object
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+        min_quantity:
+          type: integer
+          description: MOQ.
+        max_quantity:
+          type: integer
+          description: Maximum capacity.
+        min_price:
+          type: number
+        max_price:
+          type: number
+        price_unit:
+          type: string
+          enum:
+            - per_piece
+            - per_order
+        lead_time_days:
+          type: integer
+          nullable: true
+      required:
+        - category_id
+        - min_quantity
+        - max_quantity
+        - min_price
+        - max_price
+        - price_unit
+    PricingUpsert:
+      type: object
+      properties:
+        min_quantity:
+          type: integer
+          minimum: 1
+        max_quantity:
+          type: integer
+          minimum: 1
+        min_price:
+          type: number
+          minimum: 0
+        max_price:
+          type: number
+          minimum: 0
+        price_unit:
+          type: string
+          enum:
+            - per_piece
+            - per_order
+          default: per_piece
+        lead_time_days:
+          type: integer
+          minimum: 0
+          nullable: true
+      required:
+        - min_quantity
+        - max_quantity
+        - min_price
+        - max_price
+    WorkingHour:
+      type: object
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0 = Sunday ... 6 = Saturday.
+        opens_at:
+          type: string
+          example: 09:00
+          description: HH:MM.
+          nullable: true
+        closes_at:
+          type: string
+          example: 17:00
+          description: HH:MM.
+          nullable: true
+        is_closed:
+          type: boolean
+      required:
+        - day_of_week
+        - is_closed
+    WorkingHoursReplace:
+      type: object
+      properties:
+        working_hours:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/WorkingHour"
+      required:
+        - working_hours
+    AvailabilityEntry:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        status:
+          $ref: "#/components/schemas/AvailabilityStatus"
+        capacity:
+          type: integer
+          minimum: 0
+          nullable: true
+      required:
+        - date
+        - status
+    AvailabilityReplace:
+      type: object
+      properties:
+        availability:
+          type: array
+          minItems: 1
+          maxItems: 366
+          items:
+            $ref: "#/components/schemas/AvailabilityEntry"
+      required:
+        - availability
+    PortfolioItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        image_url:
+          type: string
+          format: uri
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - image_url
+    ProviderSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        business_name:
+          type: string
+        provider_type:
+          $ref: "#/components/schemas/ProviderType"
+        city:
+          type: string
+          nullable: true
+        verified:
+          type: boolean
+        rating_avg:
+          type: number
+          description: Computed from reviews. Null when there are no reviews.
+          nullable: true
+        rating_count:
+          type: integer
+        pricing:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderPricing"
+      required:
+        - id
+        - business_name
+        - provider_type
+        - verified
+        - rating_count
+        - pricing
+    ProviderProfile:
+      allOf:
+        - $ref: "#/components/schemas/ProviderSummary"
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+            address:
+              type: string
+              nullable: true
+            latitude:
+              type: number
+              nullable: true
+            longitude:
+              type: number
+              nullable: true
+            requirements:
+              type: string
+              description: Provider requirements and constraints.
+              nullable: true
+            materials:
+              type: array
+              items:
+                $ref: "#/components/schemas/Material"
+            working_hours:
+              type: array
+              items:
+                $ref: "#/components/schemas/WorkingHour"
+            portfolio:
+              type: array
+              items:
+                $ref: "#/components/schemas/PortfolioItem"
+    ProviderUpdate:
+      type: object
+      properties:
+        business_name:
+          type: string
+          minLength: 2
+          maxLength: 150
+        description:
+          type: string
+          maxLength: 5000
+          nullable: true
+        city:
+          type: string
+          maxLength: 100
+          nullable: true
+        address:
+          type: string
+          maxLength: 300
+          nullable: true
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          nullable: true
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          nullable: true
+        requirements:
+          type: string
+          maxLength: 3000
+          nullable: true
+    ProviderComparisonItem:
+      allOf:
+        - $ref: "#/components/schemas/ProviderProfile"
+        - type: object
+          properties:
+            match:
+              type: object
+              properties:
+                score:
+                  type: number
+                reason:
+                  type: string
+                  nullable: true
+              nullable: true
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        customer_name:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - provider_id
+        - rating
+    ReviewCreate:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 2000
+      required:
+        - rating
+    ProjectItemInput:
+      type: object
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        item_name:
+          type: string
+          maxLength: 200
+          description: What the customer wants, for example evening dress.
+          nullable: true
+        material_id:
+          type: string
+          format: uuid
+          nullable: true
+        material_confirmed:
+          type: boolean
+          default: false
+          description: false while the material is only an AI suggestion. Matching applies the material as a hard constraint only when the customer confirmed it.
+        material_notes:
+          type: string
+          maxLength: 500
+          description: Free text when the material is not in the catalog.
+          nullable: true
+        color:
+          type: string
+          maxLength: 100
+          nullable: true
+        style:
+          type: string
+          maxLength: 200
+          nullable: true
+        size_details:
+          type: string
+          maxLength: 500
+          nullable: true
+        customization:
+          type: string
+          maxLength: 1000
+          nullable: true
+        extra:
+          type: object
+          additionalProperties: true
+      required:
+        - category_id
+        - quantity
+    ProjectItem:
+      allOf:
+        - $ref: "#/components/schemas/ProjectItemInput"
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            project_id:
+              type: string
+              format: uuid
+            category_name:
+              type: string
+            material_name:
+              type: string
+              nullable: true
+          required:
+            - id
+            - project_id
+    ProjectItemsReplace:
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/ProjectItemInput"
+      required:
+        - items
+    ProjectCreate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 150
+        description:
+          type: string
+          maxLength: 5000
+          nullable: true
+        budget_min:
+          type: number
+          minimum: 0
+          nullable: true
+        budget_max:
+          type: number
+          minimum: 0
+          nullable: true
+        deadline:
+          type: string
+          format: date
+          nullable: true
+        location_city:
+          type: string
+          nullable: true
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/ProjectItemInput"
+      required:
+        - title
+    ProjectUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 150
+        description:
+          type: string
+          maxLength: 5000
+          nullable: true
+        budget_min:
+          type: number
+          minimum: 0
+          nullable: true
+        budget_max:
+          type: number
+          minimum: 0
+          nullable: true
+        deadline:
+          type: string
+          format: date
+          nullable: true
+        location_city:
+          type: string
+          nullable: true
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        budget_min:
+          type: number
+          nullable: true
+        budget_max:
+          type: number
+          nullable: true
+        deadline:
+          type: string
+          format: date
+          nullable: true
+        location_city:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ProjectStatus"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectItem"
+        total_quantity:
+          type: integer
+          description: "Computed: sum of item quantities."
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - customer_id
+        - title
+        - status
+        - items
+    ProjectStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - open
+            - in_progress
+            - completed
+            - cancelled
+      required:
+        - status
+    Design:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        source:
+          $ref: "#/components/schemas/DesignSource"
+        image_url:
+          type: string
+          format: uri
+        prompt:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - project_id
+        - source
+        - image_url
+    ProjectRequestCreate:
+      type: object
+      properties:
+        provider_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+          maxLength: 1000
+      required:
+        - provider_id
+    ProjectRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - project_id
+        - provider_id
+        - status
+    ProjectRequestDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProjectRequest"
+        - type: object
+          properties:
+            project:
+              $ref: "#/components/schemas/Project"
+            designs:
+              type: array
+              items:
+                $ref: "#/components/schemas/Design"
+            provider:
+              $ref: "#/components/schemas/ProviderSummary"
+    ProjectRequestStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+            - rejected
+            - withdrawn
+      required:
+        - status
+    MatchBreakdown:
+      type: object
+      properties:
+        budget_fit:
+          type: number
+          minimum: 0
+          maximum: 100
+        deadline_fit:
+          type: number
+          minimum: 0
+          maximum: 100
+        category_fit:
+          type: number
+          minimum: 0
+          maximum: 100
+        rating:
+          type: number
+          minimum: 0
+          maximum: 100
+        location:
+          type: number
+          minimum: 0
+          maximum: 100
+      required:
+        - budget_fit
+        - deadline_fit
+        - category_fit
+        - rating
+        - location
+    MatchResult:
+      type: object
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProviderSummary"
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+        reason:
+          type: string
+        breakdown:
+          $ref: "#/components/schemas/MatchBreakdown"
+      required:
+        - provider
+        - score
+        - reason
+    ExclusionReason:
+      type: object
+      properties:
+        code:
+          type: string
+          enum:
+            - CATEGORY_UNSUPPORTED
+            - MATERIAL_UNSUPPORTED
+            - BELOW_MOQ
+            - ABOVE_CAPACITY
+            - DEADLINE_TOO_SOON
+            - UNAVAILABLE
+        project_item_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+        - code
+    ExcludedProvider:
+      type: object
+      properties:
+        provider_id:
+          type: string
+          format: uuid
+        business_name:
+          type: string
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExclusionReason"
+      required:
+        - provider_id
+        - reasons
+    MatchResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - completed
+            - no_match
+        groups:
+          type: object
+          properties:
+            best_overall:
+              type: string
+              format: uuid
+              nullable: true
+            cheapest:
+              type: string
+              format: uuid
+              nullable: true
+            fastest:
+              type: string
+              format: uuid
+              nullable: true
+            best_quality:
+              type: string
+              format: uuid
+              nullable: true
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchResult"
+        excluded:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExcludedProvider"
+      required:
+        - status
+        - results
+        - excluded
+    ConversationCreate:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+      required:
+        - project_id
+        - provider_id
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        other_party_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - project_id
+        - customer_id
+        - provider_id
+    MessageCreate:
+      type: object
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+        - message
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - conversation_id
+        - sender_id
+        - message
+        - created_at
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: request_received
+        payload:
+          type: object
+          additionalProperties: true
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - created_at
+    AiExtractRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 5
+          maxLength: 4000
+        project_id:
+          type: string
+          format: uuid
+      required:
+        - text
+    ExtractedItem:
+      type: object
+      properties:
+        category:
+          type: string
+          description: Category name as understood by the AI.
+          nullable: true
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        item_name:
+          type: string
+          nullable: true
+        quantity:
+          type: integer
+          nullable: true
+        material:
+          type: string
+          description: Material name as understood by the AI. The backend maps it to material_id from the materials catalog.
+          nullable: true
+        material_id:
+          type: string
+          format: uuid
+          nullable: true
+        material_source:
+          type: string
+          enum:
+            - customer
+            - ai_suggestion
+          description: ai_suggestion means the customer has not stated it; it must be confirmed before it becomes a hard constraint.
+        color:
+          type: string
+          nullable: true
+        style:
+          type: string
+          nullable: true
+        size_details:
+          type: string
+          nullable: true
+        customization:
+          type: string
+          nullable: true
+    ExtractedRequirements:
+      type: object
+      properties:
+        budget_min:
+          type: number
+          nullable: true
+        budget_max:
+          type: number
+          nullable: true
+        deadline:
+          type: string
+          format: date
+          nullable: true
+        location_city:
+          type: string
+          nullable: true
+        priorities:
+          type: array
+          items:
+            type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedItem"
+      required:
+        - items
+    AiExtractResponse:
+      type: object
+      properties:
+        requirements:
+          $ref: "#/components/schemas/ExtractedRequirements"
+        missing_fields:
+          type: array
+          items:
+            type: string
+        follow_up_questions:
+          type: array
+          items:
+            type: string
+        ready_for_confirmation:
+          type: boolean
+      required:
+        - requirements
+        - missing_fields
+        - follow_up_questions
+        - ready_for_confirmation
+    AiGenerateDesignRequest:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        prompt:
+          type: string
+          minLength: 5
+          maxLength: 1000
+        reference_design_id:
+          type: string
+          format: uuid
+      required:
+        - project_id
+        - prompt
+    QuoteItemInput:
+      type: object
+      properties:
+        project_item_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        unit_price:
+          type: number
+          minimum: 0
+        material_id:
+          type: string
+          format: uuid
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+      required:
+        - project_item_id
+        - quantity
+        - unit_price
+    QuoteCreate:
+      type: object
+      properties:
+        lead_time_days:
+          type: integer
+          minimum: 0
+          maximum: 730
+        deposit_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Defaults to 30. Placeholder value, to be approved by the team.
+        valid_until:
+          type: string
+          format: date-time
+        note:
+          type: string
+          maxLength: 1000
+        items:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/QuoteItemInput"
+      required:
+        - lead_time_days
+        - items
+    Quote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+        round_number:
+          type: integer
+          description: Odd rounds are proposed by the provider, even rounds by the customer.
+        proposed_by:
+          type: string
+          enum:
+            - customer
+            - provider
+        status:
+          type: string
+          enum:
+            - pending
+            - accepted
+            - rejected
+            - superseded
+            - expired
+        lead_time_days:
+          type: integer
+        deposit_percent:
+          type: number
+        valid_until:
+          type: string
+          format: date-time
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteItemInput"
+        total_price:
+          type: number
+          description: Computed from items.
+        deposit_amount:
+          type: number
+          description: "Computed: total_price * deposit_percent / 100."
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - request_id
+        - round_number
+        - proposed_by
+        - status
+        - items
+        - total_price
+    QuoteRespond:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+            - rejected
+      required:
+        - status
+    OrderStatus:
+      type: string
+      enum:
+        - awaiting_deposit
+        - in_production
+        - pending_customer_approval
+        - shipped
+        - delivered
+        - completed
+        - disputed
+        - cancelled
+      description: "Allowed transitions: awaiting_deposit to in_production or cancelled; in_production to pending_customer_approval, disputed or cancelled; pending_customer_approval to shipped, in_production, disputed or cancelled; shipped to delivered or disputed; delivered to completed or disputed; disputed to in_production, completed or cancelled. completed and cancelled are final. Enforced by a database trigger."
+    OrderFinancials:
+      type: object
+      properties:
+        total_price:
+          type: number
+        deposit_percent:
+          type: number
+        deposit_amount:
+          type: number
+        paid_total:
+          type: number
+        refunded_total:
+          type: number
+        remaining_amount:
+          type: number
+      required:
+        - total_price
+        - deposit_amount
+        - paid_total
+        - remaining_amount
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+        quote_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        delivery_address:
+          type: string
+          nullable: true
+        delivery_city:
+          type: string
+          nullable: true
+        cancellation_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - project_id
+        - provider_id
+        - customer_id
+        - status
+    OrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/Order"
+        - type: object
+          properties:
+            financials:
+              $ref: "#/components/schemas/OrderFinancials"
+            stages:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductionStage"
+    OrderDeliveryUpdate:
+      type: object
+      properties:
+        delivery_address:
+          type: string
+          minLength: 5
+          maxLength: 500
+        delivery_city:
+          type: string
+          minLength: 2
+          maxLength: 100
+      required:
+        - delivery_address
+        - delivery_city
+    OrderStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - in_production
+            - pending_customer_approval
+            - shipped
+            - delivered
+            - completed
+            - disputed
+            - cancelled
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 1000
+          description: Required when status is cancelled.
+      required:
+        - status
+    ProductionStage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          enum:
+            - materials_sourcing
+            - sample
+            - production
+            - finishing
+            - quality_check
+            - packing
+        position:
+          type: integer
+        status:
+          type: string
+          enum:
+            - pending
+            - in_progress
+            - completed
+            - approved
+            - changes_requested
+        requires_customer_approval:
+          type: boolean
+        note:
+          type: string
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - order_id
+        - name
+        - position
+        - status
+        - requires_customer_approval
+    StageUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - in_progress
+            - completed
+            - approved
+            - changes_requested
+        note:
+          type: string
+          maxLength: 1000
+      required:
+        - status
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - deposit
+            - balance
+            - refund
+        amount:
+          type: number
+        status:
+          type: string
+          enum:
+            - pending
+            - paid
+            - failed
+        is_simulated:
+          type: boolean
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - order_id
+        - kind
+        - amount
+        - status
+        - is_simulated
+    PaymentCreate:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - deposit
+            - balance
+      required:
+        - kind
+    OrderIssue:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        raised_by:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - defect
+            - not_as_agreed
+            - late_delivery
+            - damaged_in_delivery
+            - other
+        description:
+          type: string
+        status:
+          type: string
+          enum:
+            - open
+            - in_review
+            - rework_agreed
+            - refund_agreed
+            - rejected
+            - closed
+        resolution_note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - order_id
+        - type
+        - description
+        - status
+    IssueCreate:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - defect
+            - not_as_agreed
+            - late_delivery
+            - damaged_in_delivery
+            - other
+        description:
+          type: string
+          minLength: 10
+          maxLength: 3000
+      required:
+        - type
+        - description
+    IssueResolve:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - in_review
+            - rework_agreed
+            - refund_agreed
+            - rejected
+            - closed
+        resolution_note:
+          type: string
+          maxLength: 2000
+      required:
+        - status
+    OrderMedia:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        stage_id:
+          type: string
+          format: uuid
+          nullable: true
+        issue_id:
+          type: string
+          format: uuid
+          nullable: true
+        image_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - order_id
+        - image_url
